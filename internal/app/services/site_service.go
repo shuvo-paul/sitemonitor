@@ -6,6 +6,7 @@ import (
 
 	"github.com/shuvo-paul/sitemonitor/internal/app/repository"
 	"github.com/shuvo-paul/sitemonitor/pkg/monitor"
+	"github.com/shuvo-paul/sitemonitor/pkg/notification"
 )
 
 type SiteServiceInterface interface {
@@ -20,14 +21,16 @@ type SiteServiceInterface interface {
 var _ SiteServiceInterface = (*SiteService)(nil)
 
 type SiteService struct {
-	repo    repository.SiteRepositoryInterface
-	manager *monitor.Manager
+	repo                repository.SiteRepositoryInterface
+	manager             *monitor.Manager
+	notificationService *NotificationService
 }
 
-func NewSiteService(repo repository.SiteRepositoryInterface) *SiteService {
+func NewSiteService(repo repository.SiteRepositoryInterface, notificationService *NotificationService) *SiteService {
 	return &SiteService{
-		repo:    repo,
-		manager: monitor.NewManager(),
+		repo:                repo,
+		manager:             monitor.NewManager(),
+		notificationService: notificationService,
 	}
 }
 
@@ -38,7 +41,27 @@ func (s *SiteService) Create(url string, interval time.Duration) (*monitor.Site,
 		Enabled:  true,
 		Status:   "pending",
 		OnStatusUpdate: func(site *monitor.Site, status string) error {
-			return s.repo.UpdateStatus(site, status)
+			oldStatus := site.Status
+			if err := s.repo.UpdateStatus(site, status); err != nil {
+				return err
+			}
+
+			// Send notification if status changed
+			if oldStatus != status {
+				event := notification.Event{
+					SiteURL:    site.URL,
+					Status:     status,
+					Message:    fmt.Sprintf("Site status changed from %s to %s", oldStatus, status),
+					OccurredAt: time.Now(),
+				}
+				if errs := s.notificationService.GetNotificationHub().Notify(event); len(errs) > 0 {
+					// Log notification errors but don't fail the status update
+					for _, err := range errs {
+						fmt.Printf("Notification error: %v\n", err)
+					}
+				}
+			}
+			return nil
 		},
 	}
 
