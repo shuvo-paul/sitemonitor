@@ -18,7 +18,7 @@ import (
 // mockNotifierRepository is a mock implementation of NotifierRepositoryInterface
 type mockNotifierRepository struct {
 	getBySiteIDFunc func(siteID int) ([]*models.Notifier, error)
-	createFunc      func(notifier *models.Notifier) error
+	createFunc      func(notifier *models.Notifier) (*models.Notifier, error)
 	getFunc         func(id int64) (*models.Notifier, error)
 	updateFunc      func(id int, config *models.NotifierConfig) (*models.Notifier, error)
 	deleteFunc      func(id int64) error
@@ -28,7 +28,7 @@ func (m *mockNotifierRepository) GetBySiteID(siteID int) ([]*models.Notifier, er
 	return m.getBySiteIDFunc(siteID)
 }
 
-func (m *mockNotifierRepository) Create(notifier *models.Notifier) error {
+func (m *mockNotifierRepository) Create(notifier *models.Notifier) (*models.Notifier, error) {
 	return m.createFunc(notifier)
 }
 
@@ -67,8 +67,15 @@ func TestNotifierService_Create(t *testing.T) {
 	service := NewNotifierService(mockRepo, nil)
 
 	t.Run("successful creation", func(t *testing.T) {
-		mockRepo.createFunc = func(notifier *models.Notifier) error {
-			return nil
+		mockRepo.createFunc = func(notifier *models.Notifier) (*models.Notifier, error) {
+			return &models.Notifier{
+				ID:     1,
+				SiteId: 1,
+				Config: &models.NotifierConfig{
+					Type:   models.NotifierTypeSlack,
+					Config: json.RawMessage(`{"webhook_url": "https://hooks.slack.com/test"}`),
+				},
+			}, nil
 		}
 
 		notifier := &models.Notifier{
@@ -86,8 +93,8 @@ func TestNotifierService_Create(t *testing.T) {
 	})
 
 	t.Run("creation fails", func(t *testing.T) {
-		mockRepo.createFunc = func(notifier *models.Notifier) error {
-			return fmt.Errorf("db error")
+		mockRepo.createFunc = func(notifier *models.Notifier) (*models.Notifier, error) {
+			return nil, fmt.Errorf("db error")
 		}
 
 		err := service.Create(&models.Notifier{})

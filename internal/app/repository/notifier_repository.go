@@ -9,7 +9,7 @@ import (
 )
 
 type NotifierRepositoryInterface interface {
-	Create(*models.Notifier) error
+	Create(*models.Notifier) (*models.Notifier, error)
 	Get(int64) (*models.Notifier, error)
 	Update(int, *models.NotifierConfig) (*models.Notifier, error)
 	Delete(int64) error
@@ -29,24 +29,33 @@ func NewNotifierRepository(db *sql.DB) *NotifierRepository {
 }
 
 // Create inserts a new notifier into the database
-func (r *NotifierRepository) Create(notifier *models.Notifier) error {
+func (r *NotifierRepository) Create(notifier *models.Notifier) (*models.Notifier, error) {
 	query := `
 		INSERT INTO notifiers (site_id, config)
 		VALUES (?, ?)
-		RETURNING id
+		RETURNING *
 	`
 
 	configBytes, err := json.Marshal(notifier.Config)
+	configString := string(configBytes)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	err = r.db.QueryRow(query, notifier.SiteId, configBytes).Scan(&notifier.ID)
+	newNotifier := &models.Notifier{}
+	var savedConfigString string
+
+	err = r.db.QueryRow(query, notifier.SiteId, configString).Scan(&newNotifier.ID, &newNotifier.SiteId, &savedConfigString)
 	if err != nil {
-		return fmt.Errorf("failed to create notifier: %w", err)
+		return nil, fmt.Errorf("failed to create notifier: %w", err)
 	}
 
-	return nil
+	err = json.Unmarshal([]byte(savedConfigString), &newNotifier.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	return newNotifier, nil
 }
 
 // Get retrieves a notifier by ID

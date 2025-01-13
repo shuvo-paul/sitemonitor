@@ -48,7 +48,7 @@ func NewNotifierService(
 
 // Create adds a new notifier
 func (s *NotifierService) Create(notifier *models.Notifier) error {
-	if err := s.notifierRepo.Create(notifier); err != nil {
+	if _, err := s.notifierRepo.Create(notifier); err != nil {
 		return fmt.Errorf("failed to create notifier: %w", err)
 	}
 	return nil
@@ -147,7 +147,7 @@ func (s *NotifierService) HandleSlackCallback(code string, siteId int) (*models.
 		SiteId: siteId,
 		Config: &models.NotifierConfig{
 			Type:   models.NotifierTypeSlack,
-			Config: json.RawMessage(webhookUrl),
+			Config: json.RawMessage(`{"webhook_url": "` + webhookUrl + `"}`),
 		},
 	}
 
